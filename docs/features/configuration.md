@@ -40,14 +40,33 @@ docker.tls.verify=1                         # Equivalent to the DOCKER_TLS_VERIF
 docker.cert.path=/some/path                 # Equivalent to the DOCKER_CERT_PATH environment variable
 ```
 
-### Disabling Ryuk
-Ryuk must be started as a privileged container.  
-If your environment already implements automatic cleanup of containers after the execution,
+## Customizing images
+
+Please read more about customizing images in the [Image name substitution](image_name_substitution.md) section.
+
+## Customizing Ryuk, the resource reaper
+
+1. Ryuk must be started as a privileged container. For that, you can set the `TESTCONTAINERS_RYUK_CONTAINER_PRIVILEGED` **environment variable**, or the  `ryuk.container.privileged` **property** to `true`.
+1. If your environment already implements automatic cleanup of containers after the execution,
 but does not allow starting privileged containers, you can turn off the Ryuk container by setting
-`TESTCONTAINERS_RYUK_DISABLED` **environment variable** to `true`.
+`TESTCONTAINERS_RYUK_DISABLED` **environment variable** , or the  `ryuk.disabled` **property** to `true`.
+1. You can specify the connection timeout for Ryuk by setting the `RYUK_CONNECTION_TIMEOUT` **environment variable**, or the `ryuk.connection.timeout` **property**. The default value is 1 minute.
+1. You can specify the reconnection timeout for Ryuk by setting the `RYUK_RECONNECTION_TIMEOUT` **environment variable**, or the `ryuk.reconnection.timeout` **property**. The default value is 10 seconds.
+1. You can configure Ryuk to run in verbose mode by setting any of the `ryuk.verbose` **property** or the `RYUK_VERBOSE` **environment variable**. The default value is `false`.
 
 !!!info
     For more information about Ryuk, see [Garbage Collector](garbage_collector.md).
+
+!!!warn
+    If using Ryuk and the Compose module, please increase the `ryuk.connection.timeout` to at least 5 minutes.
+    This is because the Compose module may take longer to start all the services. Besides, the `ryuk.reconnection.timeout`
+    should be increased to at least 30 seconds. For further information, please check [https://github.com/testcontainers/testcontainers-go/pull/2485](https://github.com/testcontainers/testcontainers-go/pull/2485).
+
+!!!warn
+    The following environment variables for configuring Ryuk have been deprecated:
+    `TESTCONTAINERS_RYUK_CONNECTION_TIMEOUT`, `TESTCONTAINERS_RYUK_RECONNECTION_TIMEOUT` and
+    `TESTCONTAINERS_RYUK_VERBOSE` have been replaced by `RYUK_CONNECTION_TIMEOUT`
+    `RYUK_RECONNECTION_TIMEOUT` and `RYUK_VERBOSE` respectively.
 
 ## Docker host detection
 
@@ -72,7 +91,7 @@ See [Docker environment variables](https://docs.docker.com/engine/reference/comm
     3. `${HOME}/.docker/desktop/docker.sock`.
     4. `/run/user/${UID}/docker.sock`, where `${UID}` is the user ID of the current user.
 
-7. The default Docker socket including schema will be returned if none of the above are set.
+7. The library panics if none of the above are set, meaning that the Docker host was not detected.
 
 ## Docker socket path detection
 
@@ -88,7 +107,7 @@ Path to Docker's socket. Used by Ryuk, Docker Compose, and a few other container
 
     Example: `/var/run/docker-alt.sock`
 
-3. If the Operative System retrieved by the Docker client is "Docker Desktop", return the default docker socket path for rootless docker.
+3. If the Operative System retrieved by the Docker client is "Docker Desktop", and the host is running on Windows, it will return the `//var/run/docker.sock` UNC Path. Else return the default docker socket path for rootless docker.
 
 4. Get the current Docker Host from the existing strategies: see [Docker host detection](#docker-host-detection).
 
@@ -96,4 +115,4 @@ Path to Docker's socket. Used by Ryuk, Docker Compose, and a few other container
 
 6. Else, the default location of the docker socket is used: `/var/run/docker.sock`
 
-In any case, if the docker socket schema is `tcp://`, the default docker socket path will be returned.
+The library panics if the Docker host cannot be discovered.

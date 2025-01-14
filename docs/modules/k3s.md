@@ -17,20 +17,27 @@ go get github.com/testcontainers/testcontainers-go/modules/k3s
 ## Usage example
 
 <!--codeinclude-->
-[Test for a K3s container](../../modules/k3s/k3s_test.go) inside_block: k3sRunContainer
+[Test for a K3s container](../../modules/k3s/k3s_test.go) inside_block:runK3sContainer
 <!--/codeinclude-->
 
-## Module reference
+## Module Reference
 
-The K3s module exposes one entrypoint function to create the K3s container, and this function receives two parameters:
+### Run function
+
+- Since testcontainers-go <a href="https://github.com/testcontainers/testcontainers-go/releases/tag/v0.32.0"><span class="tc-version">:material-tag: v0.32.0</span></a>
+
+!!!info
+    The `RunContainer(ctx, opts...)` function is deprecated and will be removed in the next major release of _Testcontainers for Go_.
+
+The K3s module exposes one entrypoint function to create the K3s container, and this function receives three parameters:
 
 ```golang
-func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomizer) (*K3sContainer, error)
+func Run(ctx context.Context, img string, opts ...testcontainers.ContainerCustomizer) (*K3sContainer, error)
 ```
 
 - `context.Context`, the Go context.
+- `string`, the Docker image to use.
 - `testcontainers.ContainerCustomizer`, a variadic argument for passing options.
-
 
 ### Container Ports
 These are the ports used by the K3s container:
@@ -44,28 +51,24 @@ When starting the K3s container, you can pass options in a variadic way to confi
 
 #### Image
 
-If you need to set a different K3s Docker image, you can use `testcontainers.WithImage` with a valid Docker image
-for K3s. E.g. `testcontainers.WithImage("docker.io/rancher/k3s:v1.27.1-k3s1")`.
+If you need to set a different K3s Docker image, you can set a valid Docker image as the second argument in the `Run` function.
+E.g. `Run(context.Background(), "rancher/k3s:v1.27.1-k3s1")`.
 
-#### Wait Strategies
+{% include "../features/common_functional_options.md" %}
 
-If you need to set a different wait strategy for K3s, you can use `testcontainers.WithWaitStrategy` with a valid wait strategy
-for K3s.
+## WithManifest
 
-!!!info
-    The default deadline for the wait strategy is 60 seconds.
+The `WithManifest` option loads a manifest obtained from a local file into the cluster. K3s applies it automatically during the startup process
 
-At the same time, it's possible to set a wait strategy and a custom deadline with `testcontainers.WithWaitStrategyAndDeadline`.
+```golang
+func WithManifest(manifestPath string) testcontainers.CustomizeRequestOption
+```
 
-#### Docker type modifiers
+Example:
 
-If you need an advanced configuration for K3s, you can leverage the following Docker type modifiers:
-
-- `testcontainers.WithConfigModifier`
-- `testcontainers.WithHostConfigModifier`
-- `testcontainers.WithEndpointSettingsModifier`
-
-Please read the [Create containers: Advanced Settings](../features/creating_container.md#advanced-settings) documentation for more information.
+```golang
+        WithManifest("nginx-manifest.yaml")
+```
 
 ### Container Methods
 
@@ -77,5 +80,13 @@ The `GetKubeConfig` method returns the K3s cluster's `kubeconfig`, including the
 to the Kubernetes Rest Client API using a Kubernetes client. It'll be returned in the format of `[]bytes`.
 
 <!--codeinclude-->
-[Get KubeConifg](../../modules/k3s/k3s_test.go) inside_block:GetKubeConfig
+[Get KubeConfig](../../modules/k3s/k3s_example_test.go) inside_block:GetKubeConfig
 <!--/codeinclude-->
+
+#### LoadImages
+
+The `LoadImages` method loads a list of images into the kubernetes cluster and makes them available to pods.
+
+This is useful for testing images generated locally without having to push them to a public docker registry or having to configure `k3s` to [use a private registry](https://docs.k3s.io/installation/private-registry).
+
+The images must be already present in the node running the test. [DockerProvider](https://pkg.go.dev/github.com/testcontainers/testcontainers-go#DockerProvider) offers a method for pulling images, which can be used from the test code to ensure the image is present locally before loading them to the cluster.

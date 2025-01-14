@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/go-connections/nat"
+	"gopkg.in/yaml.v3"
+
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -26,15 +29,39 @@ type K3sContainer struct {
 	testcontainers.Container
 }
 
+// path to the k3s manifests directory
+const k3sManifests = "/var/lib/rancher/k3s/server/manifests/"
+
+// WithManifest loads the manifest into the cluster. K3s applies it automatically during the startup process
+func WithManifest(manifestPath string) testcontainers.CustomizeRequestOption {
+	return func(req *testcontainers.GenericContainerRequest) error {
+		manifest := filepath.Base(manifestPath)
+		target := k3sManifests + manifest
+
+		req.Files = append(req.Files, testcontainers.ContainerFile{
+			HostFilePath:      manifestPath,
+			ContainerFilePath: target,
+		})
+
+		return nil
+	}
+}
+
+// Deprecated: use Run instead
 // RunContainer creates an instance of the K3s container type
 func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomizer) (*K3sContainer, error) {
+	return Run(ctx, "rancher/k3s:v1.27.1-k3s1", opts...)
+}
+
+// Run creates an instance of the K3s container type
+func Run(ctx context.Context, img string, opts ...testcontainers.ContainerCustomizer) (*K3sContainer, error) {
 	host, err := getContainerHost(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}
 
 	req := testcontainers.ContainerRequest{
-		Image: "docker.io/rancher/k3s:v1.27.1-k3s1",
+		Image: img,
 		ExposedPorts: []string{
 			defaultKubeSecurePort,
 			defaultRancherWebhookPort,
@@ -47,7 +74,6 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 				"/var/run": "",
 			}
 			hc.Mounts = []mount.Mount{}
-
 		},
 		Cmd: []string{
 			"server",
@@ -57,7 +83,7 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 		Env: map[string]string{
 			"K3S_KUBECONFIG_MODE": "644",
 		},
-		WaitingFor: wait.ForLog("k3s is up and running"),
+		WaitingFor: wait.ForLog(".*Node controller sync successful.*").AsRegexp(),
 	}
 
 	genericContainerReq := testcontainers.GenericContainerRequest{
@@ -66,22 +92,31 @@ func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomize
 	}
 
 	for _, opt := range opts {
-		opt.Customize(&genericContainerReq)
+		if err := opt.Customize(&genericContainerReq); err != nil {
+			return nil, err
+		}
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, genericContainerReq)
-	if err != nil {
-		return nil, err
+	var c *K3sContainer
+	if container != nil {
+		c = &K3sContainer{Container: container}
 	}
 
-	return &K3sContainer{Container: container}, nil
+	if err != nil {
+		return c, fmt.Errorf("generic container: %w", err)
+	}
+
+	return c, nil
 }
 
 func getContainerHost(ctx context.Context, opts ...testcontainers.ContainerCustomizer) (string, error) {
 	// Use a dummy request to get the provider from options.
 	var req testcontainers.GenericContainerRequest
 	for _, opt := range opts {
-		opt.Customize(&req)
+		if err := opt.Customize(&req); err != nil {
+			return "", err
+		}
 	}
 
 	logging := req.Logger
@@ -93,8 +128,7 @@ func getContainerHost(ctx context.Context, opts ...testcontainers.ContainerCusto
 		return "", err
 	}
 
-	switch p := p.(type) {
-	case *testcontainers.DockerProvider:
+	if p, ok := p.(*testcontainers.DockerProvider); ok {
 		return p.DaemonHost(ctx)
 	}
 
@@ -134,7 +168,6 @@ func (c *K3sContainer) GetKubeConfig(ctx context.Context) ([]byte, error) {
 }
 
 func kubeConfigWithServerUrl(kubeConfigYaml, server string) ([]byte, error) {
-
 	kubeConfig, err := unmarshal([]byte(kubeConfigYaml))
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal kubeconfig: %w", err)
@@ -164,4 +197,39 @@ func unmarshal(bytes []byte) (*KubeConfigValue, error) {
 		return nil, err
 	}
 	return &kubeConfig, nil
+}
+
+// LoadImages loads images into the k3s container.
+func (c *K3sContainer) LoadImages(ctx context.Context, images ...string) error {
+	provider, err := testcontainers.ProviderDocker.GetProvider()
+	if err != nil {
+		return fmt.Errorf("getting docker provider %w", err)
+	}
+
+	// save image
+	imagesTar, err := os.CreateTemp(os.TempDir(), "images*.tar")
+	if err != nil {
+		return fmt.Errorf("creating temporary images file %w", err)
+	}
+	defer func() {
+		_ = os.Remove(imagesTar.Name())
+	}()
+
+	err = provider.SaveImages(context.Background(), imagesTar.Name(), images...)
+	if err != nil {
+		return fmt.Errorf("saving images %w", err)
+	}
+
+	containerPath := "/tmp/" + filepath.Base(imagesTar.Name())
+	err = c.Container.CopyFileToContainer(ctx, imagesTar.Name(), containerPath, 0x644)
+	if err != nil {
+		return fmt.Errorf("copying image to container %w", err)
+	}
+
+	_, _, err = c.Container.Exec(ctx, []string{"ctr", "-n=k8s.io", "images", "import", containerPath})
+	if err != nil {
+		return fmt.Errorf("importing image %w", err)
+	}
+
+	return nil
 }

@@ -17,18 +17,26 @@ go get github.com/testcontainers/testcontainers-go/modules/mysql
 ## Usage example
 
 <!--codeinclude--> 
-[Creating a MySQL container](../../modules/mysql/mysql_test.go) inside_block:createMysqlContainer
+[Creating a MySQL container](../../modules/mysql/examples_test.go) inside_block:runMySQLContainer
 <!--/codeinclude-->
 
 ## Module Reference
 
-The MySQL module exposes one entrypoint function to create the container, and this function receives two parameters:
+### Run function
+
+- Since testcontainers-go <a href="https://github.com/testcontainers/testcontainers-go/releases/tag/v0.32.0"><span class="tc-version">:material-tag: v0.32.0</span></a>
+
+!!!info
+    The `RunContainer(ctx, opts...)` function is deprecated and will be removed in the next major release of _Testcontainers for Go_.
+
+The MySQL module exposes one entrypoint function to create the container, and this function receives three parameters:
 
 ```golang
-func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomizer) (*MySQLContainer, error) {
+func Run(ctx context.Context, img string, opts ...testcontainers.ContainerCustomizer) (*MySQLContainer, error)
 ```
 
 - `context.Context`, the Go context.
+- `string`, the Docker image to use.
 - `testcontainers.ContainerCustomizer`, a variadic argument for passing options.
 
 ### Container Options
@@ -41,47 +49,15 @@ When starting the MySQL container, you can pass options in a variadic way to con
 
 #### Image
 
-If you need to set a different MySQL Docker image, you can use `testcontainers.WithImage` with a valid Docker image
-for MySQL. E.g. `testcontainers.WithImage("mysql:5.6")`.
+If you need to set a different MySQL Docker image, you can set a valid Docker image as the second argument in the `Run` function.
+E.g. `Run(context.Background(), "mysql:8.0.36")`.
 
-<!--codeinclude-->
-[Custom Image](../../modules/mysql/mysql_test.go) inside_block:withConfigFile
-<!--/codeinclude-->
-
-By default, the container will use the following Docker image:
-
-<!--codeinclude-->
-[Default Docker image](../../modules/mysql/mysql.go) inside_block:defaultImage
-<!--/codeinclude-->
-
-#### Wait Strategies
-
-If you need to set a different wait strategy for MySQL, you can use `testcontainers.WithWaitStrategy` with a valid wait strategy
-for MySQL.
-
-!!!info
-    The default deadline for the wait strategy is 60 seconds.
-
-At the same time, it's possible to set a wait strategy and a custom deadline with `testcontainers.WithWaitStrategyAndDeadline`.
-
-#### Docker type modifiers
-
-If you need an advanced configuration for MySQL, you can leverage the following Docker type modifiers:
-
-- `testcontainers.WithConfigModifier`
-- `testcontainers.WithHostConfigModifier`
-- `testcontainers.WithEndpointSettingsModifier`
-
-Please read the [Create containers: Advanced Settings](../features/creating_container.md#advanced-settings) documentation for more information.
+{% include "../features/common_functional_options.md" %}
 
 #### Set username, password and database name
 
 If you need to set a different database, and its credentials, you can use `WithUsername`, `WithPassword`, `WithDatabase`
-options.  By default, the username, the password and the database name is `test`.
-
-<!--codeinclude-->
-[Custom Database initialization](../../modules/mysql/mysql_test.go) inside_block:customInitialization
-<!--/codeinclude-->
+options.
 
 !!!info
     The default values for the username is `root`, for password is `test` and for the default database name is `test`.
@@ -89,26 +65,22 @@ options.  By default, the username, the password and the database name is `test`
 #### Init Scripts
 
 If you would like to perform DDL or DML operations in the MySQL container, add one or more `*.sql`, `*.sql.gz`, or `*.sh`
-scripts to the container request. Those files will be copied under `/docker-entrypoint-initdb.d`.
+scripts to the container request, using the `WithScripts(scriptPaths ...string)`. Those files will be copied under `/docker-entrypoint-initdb.d`.
 
 <!--codeinclude-->
-[Include init scripts](../../modules/mysql/mysql_test.go) inside_block:withScripts
+[Example of Init script](../../modules/mysql/testdata/schema.sql)
 <!--/codeinclude-->
 
 #### Custom configuration
 
-If you need to set a custom configuration, you can use `WithConfigFile` option.
-
-<!--codeinclude-->
-[Custom MySQL config file](../../modules/mysql/mysql_test.go) inside_block:withConfigFile
-<!--/codeinclude-->
+If you need to set a custom configuration, you can use `WithConfigFile` option to pass the path to a custom configuration file.
 
 ### Container Methods
 
 #### ConnectionString
 
 This method returns the connection string to connect to the MySQL container, using the default `3306` port.
-It's possible to pass extra parameters to the connection string, e.g. `sslmode=disable` or `application_name=myapp`, in a variadic way.
+It's possible to pass extra parameters to the connection string, e.g. `tls=skip-verify` or `application_name=myapp`, in a variadic way.
 
 <!--codeinclude-->
 [Get connection string](../../modules/mysql/mysql_test.go) inside_block:connectionString

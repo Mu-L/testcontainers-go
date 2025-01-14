@@ -14,6 +14,7 @@ readonly DRY_RUN="${DRY_RUN:-true}"
 readonly CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 readonly ROOT_DIR="$(dirname "$CURRENT_DIR")"
 readonly MKDOCS_FILE="${ROOT_DIR}/mkdocs.yml"
+readonly SONARCLOUD_FILE="${ROOT_DIR}/sonar-project.properties"
 readonly VERSION_FILE="${ROOT_DIR}/internal/version.go"
 
 readonly REPOSITORY="github.com/testcontainers/testcontainers-go"
@@ -27,11 +28,12 @@ function main() {
   bumpVersion "${version}"
 }
 
-# This function is used to bump the version in the version.go file and in the mkdocs.yml file.
+# This function is used to bump the version in those files that refer to the project version.
 function bumpVersion() {
   local versionToBumpWithoutV="${1}"
   local versionToBump="v${versionToBumpWithoutV}"
 
+  # Bump version in the mkdocs descriptor file
   if [[ "${DRY_RUN}" == "true" ]]; then
     echo "sed \"s/latest_version: .*/latest_version: ${versionToBump}/g\" ${MKDOCS_FILE} > ${MKDOCS_FILE}.tmp"
     echo "mv ${MKDOCS_FILE}.tmp ${MKDOCS_FILE}"
@@ -40,6 +42,16 @@ function bumpVersion() {
     mv ${MKDOCS_FILE}.tmp ${MKDOCS_FILE}
   fi
 
+  # Bump version in the sonarcloud properties file
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    echo "sed \"s/sonar\.projectVersion=.*/sonar\.projectVersion=${versionToBump}/g\" ${SONARCLOUD_FILE} > ${SONARCLOUD_FILE}.tmp"
+    echo "mv ${SONARCLOUD_FILE}.tmp ${SONARCLOUD_FILE}"
+  else
+    sed "s/sonar\.projectVersion=.*/sonar\.projectVersion=${versionToBump}/g" ${SONARCLOUD_FILE} > ${SONARCLOUD_FILE}.tmp
+    mv ${SONARCLOUD_FILE}.tmp ${SONARCLOUD_FILE}
+  fi
+
+  # Bump version across all modules, in their go.mod files
   for directory in "${DIRECTORIES[@]}"
   do
     cd "${ROOT_DIR}/${directory}"
@@ -59,13 +71,14 @@ function bumpVersion() {
     make "tidy-${directory}"
   done
 
-  cd "${ROOT_DIR}/docs/modules"
+  cd "${ROOT_DIR}/docs"
 
   versionEscapingDots="${versionToBumpWithoutV/./\.}"
   NON_RELEASED_STRING='Not available until the next release of testcontainers-go <a href=\"https:\/\/github.com\/testcontainers\/testcontainers-go\"><span class=\"tc-version\">:material-tag: main<\/span><\/a>'
   RELEASED_STRING="Since testcontainers-go <a href=\\\"https:\/\/github.com\/testcontainers\/testcontainers-go\/releases\/tag\/v${versionEscapingDots}\\\"><span class=\\\"tc-version\\\">:material-tag: v${versionEscapingDots}<\/span><\/a>"
 
-  ls | grep -v "index.md" | while read -r module_file; do
+  # find all markdown files, and for each of them, replace the release string
+  find . -name "*.md" | while read -r module_file; do
     if [[ "${DRY_RUN}" == "true" ]]; then
       echo "sed \"s/${NON_RELEASED_STRING}/${RELEASED_STRING}/g\" ${module_file} > ${module_file}.tmp"
       echo "mv ${module_file}.tmp ${module_file}"

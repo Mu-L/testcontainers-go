@@ -13,11 +13,12 @@
 # Usage: DRY_RUN="false" ./scripts/release.sh
 
 readonly BUMP_TYPE="${BUMP_TYPE:-minor}"
-readonly DOCKER_IMAGE_SEMVER="docker.io/mdelapenya/semver-tool:3.4.0"
+readonly DOCKER_IMAGE_SEMVER="mdelapenya/semver-tool:3.4.0"
 readonly DRY_RUN="${DRY_RUN:-true}"
 readonly CURRENT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 readonly ROOT_DIR="$(dirname "$CURRENT_DIR")"
 readonly MKDOCS_FILE="${ROOT_DIR}/mkdocs.yml"
+readonly SONARCLOUD_FILE="${ROOT_DIR}/sonar-project.properties"
 readonly VERSION_FILE="${ROOT_DIR}/internal/version.go"
 
 readonly REPOSITORY="github.com/testcontainers/testcontainers-go"
@@ -27,6 +28,13 @@ function main() {
   local version="$(extractCurrentVersion)"
   local vVersion="v${version}"
   echo "Current version: ${vVersion}"
+
+  # Get the version to bump to from the semver-tool and the bump type
+  local newVersion=$(docker run --rm --platform=linux/amd64 -i "${DOCKER_IMAGE_SEMVER}" bump "${BUMP_TYPE}" "${vVersion}")
+  if [[ "${newVersion}" == "" ]]; then
+    echo "Failed to bump the version. Please check the semver-tool image and the bump type."
+    exit 1
+  fi
 
   # Commit the project in the current state
   gitCommitVersion "${vVersion}"
@@ -44,8 +52,6 @@ function main() {
     done
   done
 
-  # Get the version to bump to from the semver-tool and the bump type
-  local newVersion=$(docker run --rm "${DOCKER_IMAGE_SEMVER}" bump "${BUMP_TYPE}" "${vVersion}")
   echo "Producing a ${BUMP_TYPE} bump of the version, from ${version} to ${newVersion}"
 
   # Bump the version in the version.go file
@@ -120,6 +126,7 @@ function gitCommitVersion() {
 
   gitFn add "${VERSION_FILE}"
   gitFn add "${MKDOCS_FILE}"
+  gitFn add "${SONARCLOUD_FILE}"
   gitFn add "docs/**/*.md"
   gitFn add "examples/**/go.*"
   gitFn add "modules/**/go.*"

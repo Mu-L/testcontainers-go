@@ -23,20 +23,26 @@ go get github.com/testcontainers/testcontainers-go/modules/pulsar
 Create a `Pulsar` container to use it in your tests:
 
 <!--codeinclude-->
-[Creating a Pulsar container](../../modules/pulsar/pulsar_test.go) inside_block:startPulsarContainer
+[Creating a Pulsar container](../../modules/pulsar/examples_test.go) inside_block:runPulsarContainer
 <!--/codeinclude-->
-
-where the `tt.opts` are the options to configure the container. See the [Container Options](#container-options) section for more details.
 
 ## Module Reference
 
-The Redis module exposes one entrypoint function to create the containerr, and this function receives two parameters:
+### Run function
+
+- Since testcontainers-go <a href="https://github.com/testcontainers/testcontainers-go/releases/tag/v0.32.0"><span class="tc-version">:material-tag: v0.32.0</span></a>
+
+!!!info
+    The `RunContainer(ctx, opts...)` function is deprecated and will be removed in the next major release of _Testcontainers for Go_.
+
+The Pulsar module exposes one entrypoint function to create the container, and this function receives three parameters:
 
 ```golang
-func RunContainer(ctx context.Context, opts ...testcontainers.ContainerCustomizer) (*Container, error)
+func Run(ctx context.Context, img string, opts ...testcontainers.ContainerCustomizer) (*Container, error)
 ```
 
 - `context.Context`, the Go context.
+- `string`, the Docker image to use.
 - `testcontainers.ContainerCustomizer`, a variadic argument for passing options.
 
 ### Container Options
@@ -45,36 +51,16 @@ When starting the Pulsar container, you can pass options in a variadic way to co
 
 #### Image
 
-If you need to set a different Pulsar Docker image, you can use `testcontainers.WithImage` with a valid Docker image
-for Pulsar. E.g. `testcontainers.WithImage("docker.io/apachepulsar/pulsar:2.10.2")`.
+If you need to set a different Pulsar Docker image, you can set a valid Docker image as the second argument in the `Run` function.
+E.g. `Run(context.Background(), "apachepulsar/pulsar:2.10.2")`.
 
-<!--codeinclude-->
-[Set Pulsar image](../../modules/pulsar/pulsar_test.go) inside_block:setPulsarImage
-<!--/codeinclude-->
-
-#### Wait Strategies
-
-If you need to set a different wait strategy for Pulsar, you can use `testcontainers.WithWaitStrategy` with a valid wait strategy
-for Pulsar.
-
-!!!info
-    The default deadline for the wait strategy is 60 seconds.
-
-At the same time, it's possible to set a wait strategy and a custom deadline with `testcontainers.WithWaitStrategyAndDeadline`.
-
-#### Docker type modifiers
-
-If you need an advanced configuration for Pulsar, you can leverage the following Docker type modifiers:
-
-- `testcontainers.WithConfigModifier`
-- `testcontainers.WithHostConfigModifier`
-- `testcontainers.WithEndpointSettingsModifier`
-
-Please read the [Create containers: Advanced Settings](../features/creating_container.md#advanced-settings) documentation for more information.
+{% include "../features/common_functional_options.md" %}
 
 <!--codeinclude-->
 [Advanced Docker settings](../../modules/pulsar/pulsar_test.go) inside_block:advancedDockerSettings
 <!--/codeinclude-->
+
+Here, the `nwName` relates to the name of a previously created Docker network. Please see the [How to create a network](../features/creating_networks.md) documentation for more information.
 
 #### Pulsar Configuration
 If you need to set Pulsar configuration variables you can use the `WithPulsarEnv` to set Pulsar environment variables: the `PULSAR_PREFIX_` prefix will be automatically added for you.
@@ -102,24 +88,6 @@ If you need to test Pulsar Transactions you can enable the transactions feature:
 <!--codeinclude-->
 [Create a Pulsar container with transactions](../../modules/pulsar/pulsar_test.go) inside_block:withTransactions
 <!--/codeinclude-->
-
-#### Log consumers
-If you need to collect the logs from the Pulsar container, you can add your own LogConsumer with the `WithLogConsumers` function, which accepts a variadic argument of LogConsumers.
-
-<!--codeinclude-->
-[Adding LogConsumers](../../modules/pulsar/pulsar_test.go) inside_block:withLogConsumers
-<!--/codeinclude-->
-
-An example of a LogConsumer could be the following:
-
-<!--codeinclude-->
-[Example LogConsumer](../../modules/pulsar/pulsar_test.go) inside_block:logConsumerForTesting
-<!--/codeinclude-->
-
-!!!warning
-    You will need to explicitly stop the producer in your tests.
-
-If you want to know more about LogConsumers, please check the [Following Container Logs](../features/follow_logs.md) documentation.
 
 ### Container methods
 

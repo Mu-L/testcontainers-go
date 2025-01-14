@@ -14,3 +14,16 @@ superusers:
 {{- if .KafkaAPIEnableAuthorization }}
 kafka_enable_authorization: true
 {{- end }}
+
+{{- if .EnableWasmTransform }}
+data_transforms_enabled: true
+{{- end }}
+
+{{- if .AutoCreateTopics }}
+auto_create_topics_enabled: true
+{{- end }}
+
+{{- range $key, $value := .ExtraBootstrapConfig }}
+{{ $key }}: {{ $value }}
+{{- end }}
+
